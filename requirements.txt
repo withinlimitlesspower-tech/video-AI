@@ -1,0 +1,8 @@
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+celery==5.3.4
+redis==5.0.1
+requests==2.31.0
+moviepy==1.0.3
+Pillow==10.1.0
+eventlet==0.33.3
