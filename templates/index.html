@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Maker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">AI Video Maker</h1>
+        <p class="text-gray-600 text-center mb-8">Generate videos from text prompts using AI. Enter a prompt below and let the AI create a video with visuals and voiceover.</p>
+        
+        <div class="mb-6">
+            <label for="prompt" class="block text-gray-700 font-medium mb-2">Enter your video idea:</label>
+            <textarea id="prompt" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Make a video about space exploration"></textarea>
+        </div>
+        
+        <button id="generateBtn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition duration-200">Generate Video</button>
+        
+        <div id="progressSection" class="mt-8 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Generation Progress</h2>
+            <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+                <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%;"></div>
+            </div>
+            <p id="progressText" class="text-gray-700 text-center">0% - Starting...</p>
+            <div id="errorMessage" class="mt-4 text-red-600 hidden"></div>
+        </div>
+        
+        <div id="downloadSection" class="mt-8 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Video Ready!</h2>
+            <p class="text-gray-700 mb-4">Your video has been generated. Click below to download.</p>
+            <a id="downloadLink" href="#" class="block w-full bg-green-600 text-white font-semibold py-3 rounded-lg text-center hover:bg-green-700 transition duration-200">Download Video</a>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentTaskId = null;
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('progress', (data) => {
+            if (data.task_id === currentTaskId) {
+                const progress = data.progress;
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                
+                if (progress === -1) {
+                    progressBar.style.width = '100%';
+                    progressBar.classList.remove('bg-blue-600');
+                    progressBar.classList.add('bg-red-600');
+                    progressText.textContent = 'Error occurred during generation';
+                    document.getElementById('errorMessage').classList.remove('hidden');
+                    document.getElementById('errorMessage').textContent = 'Video generation failed. Please try again.';
+                    return;
+                }
+                
+                progressBar.style.width = progress + '%';
+                if (progress < 30) {
+                    progressText.textContent = progress + '% - Generating script...';
+                } else if (progress < 60) {
+                    progressText.textContent = progress + '% - Fetching visuals...';
+                } else if (progress < 80) {
+                    progressText.textContent = progress + '% - Creating voiceover...';
+                } else if (progress < 100) {
+                    progressText.textContent = progress + '% - Editing video...';
+                } else {
+                    progressText.textContent = '100% - Video ready!';
+                    setTimeout(() => {
+                        document.getElementById('progressSection').classList.add('hidden');
+                        document.getElementById('downloadSection').classList.remove('hidden');
+                        document.getElementById('downloadLink').href = `/download/${currentTaskId}`;
+                    }, 1000);
+                }
+            }
+        });
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const prompt = document.getElementById('prompt').value.trim();
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            // Reset UI
+            document.getElementById('progressSection').classList.remove('hidden');
+            document.getElementById('downloadSection').classList.add('hidden');
+            document.getElementById('errorMessage').classList.add('hidden');
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').classList.remove('bg-red-600');
+            document.getElementById('progressBar').classList.add('bg-blue-600');
+            document.getElementById('progressText').textContent = '0% - Starting...';
+            
+            // Disable button during generation
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            btn.classList.add('opacity-50');
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    currentTaskId = data.task_id;
+                } else {
+                    throw new Error(data.error || 'Generation failed');
+                }
+            } catch (error) {
+                alert('Error starting video generation: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Generate Video';
+                btn.classList.remove('opacity-50');
+            }
+        });
+
+        // Re-enable button when progress is done or error
+        socket.on('progress', (data) => {
+            if (data.task_id === currentTaskId && (data.progress === 100 || data.progress === -1)) {
+                const btn = document.getElementById('generateBtn');
+                btn.disabled = false;
+                btn.textContent = 'Generate Video';
+                btn.classList.remove('opacity-50');
+            }
+        });
+    </script>
+</body>
+</html>
